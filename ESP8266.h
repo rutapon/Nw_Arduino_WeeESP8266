@@ -43,17 +43,24 @@
 // library states (library works like a simple FSM
 #define STATE_IDLE			0 //when server connected
 
-#define STATE_CONNECTED_AP	1 //when connected AP but not yet connect to server;
-#define STATE_NOT_CONNECTED_AP	2 //when start or ip lost
+//#define STATE_CONNECTED_AP	1 //when connected AP but not yet connect to server;
+//#define STATE_NOT_CONNECTED_AP	2 //when start or ip lost
+//
+//#define STATE_ERROR			3
+//
+//#define STATE_RESETING		4
+//
+//#define STATE_SENDING_DATA	5
+//
+//#define STATE_RECIVING_DATA	6
+//#define STATE_DATA_RECIVED	7
 
-#define STATE_ERROR			3
-
-#define STATE_RESETING		4
-
-#define STATE_SENDING_DATA	5
-
-#define STATE_RECIVING_DATA	6
-#define STATE_DATA_RECIVED	7
+#define STATE_getIPStatus	1
+#define STATE_joinAP		2
+#define STATE_leaveAP		3
+#define STATE_createTCP		4
+#define STATE_releaseTCP	5
+#define STATE_send			6
 
 
 #define KEYWORD_PIPD "+IPD,"
@@ -194,28 +201,28 @@ private:
 	/* 
 	* Recvive data from uart. Return all received data if target found or timeout. 
 	*/
-	String recvString(String target, uint32_t timeout = 1000);
+	void recvString(char target[], uint32_t timeout = 1000);
 
 	/* 
 	* Recvive data from uart. Return all received data if one of target1 and target2 found or timeout. 
 	*/
-	String recvString(String target1, String target2, uint32_t timeout = 1000);
+	void recvString(char target1[], char target2[], uint32_t timeout = 1000);
 
 	/* 
 	* Recvive data from uart. Return all received data if one of target1, target2 and target3 found or timeout. 
 	*/
-	String recvString(String target1, String target2, String target3, uint32_t timeout = 1000);
+	void recvString(char target1[], char target2[], char target3[],  uint32_t timeout = 1000);
 
 	/* 
 	* Recvive data from uart and search first target. Return true if target found, false for timeout.
 	*/
-	bool recvFind(String target, uint32_t timeout = 1000);
+	bool recvFind(char target1[], uint32_t timeout = 1000);
 
 	/* 
 	* Recvive data from uart and search first target and cut out the substring between begin and end(excluding begin and end self). 
 	* Return true if target found, false for timeout.
 	*/
-	bool recvFindAndFilter(String target, String begin, String end, String &data, uint32_t timeout = 1000);
+	//bool recvFindAndFilter(String target, String begin, String end, String &data, uint32_t timeout = 1000);
 
 	/*
 	* Receive a package from uart. 
@@ -242,6 +249,8 @@ private:
 	bool eATCIPCLOSESingle(void);///
 
 
+
+
 	/*
 	* +IPD,len:data
 	* +IPD,id,len:data
@@ -259,8 +268,7 @@ private:
 	uint8_t state;
 
 	char buffer[SERIAL_RX_BUFFER_SIZE];
-	uint8_t * _messageBuffer;
-	uint32_t  _buffer_size;
+	uint16_t bufferCursor;
 
 	bool bufferFind(bool trueKeywords);
 
@@ -284,10 +292,11 @@ private:
 
 	void(*dataRecivedHandler)(char data[]);
 
-	void(*serialResponseHandler)(uint8_t serialResponseStatus);
+	//void(*serialResponseHandler)(uint8_t serialResponseStatus);
 
+	void callSerialResponseMethod(uint8_t serialResponseStatus);
 
-	static void ReadMessage(uint8_t serialResponseStatus);
+    void ReadMessage(uint8_t serialResponseStatus);
 
 #ifdef ESP8266_USE_SOFTWARE_SERIAL
 	SoftwareSerial *m_puart; /* The UART to communicate with ESP8266 */

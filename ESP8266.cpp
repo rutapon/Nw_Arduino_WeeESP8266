@@ -44,7 +44,7 @@
 #ifdef ESP8266_USE_SOFTWARE_SERIAL
 ESP8266::ESP8266(SoftwareSerial &uart, uint32_t baud): m_puart(&uart)
 {
-	state = STATE_RECIVING_DATA;
+	//state = STATE_RECIVING_DATA;
 	m_puart->begin(baud);
 	rx_empty();
 }
@@ -125,13 +125,6 @@ bool ESP8266::send(const uint8_t *buffer, uint32_t len)
 //	return recvPkg(data,buffer,buffer_size,data_len,timeout,coming_mux_id);
 //}
 
-void ESP8266::waitMessage(){
-	state = STATE_RECIVING_DATA;
-
-	setResponseTrueKeywords(KEYWORD_PIPD);
-
-	readResponse(30000, ReadMessage);
-}
 
 void ESP8266::ReadMessage(uint8_t serialResponseStatus) {
 	//wifi.state = STATE_DATA_RECIVED;
@@ -281,101 +274,91 @@ void ESP8266::rx_empty(void)
 }
 
 ///
-String ESP8266::recvString(String target, uint32_t timeout)
+void ESP8266::recvString(char target[], uint32_t timeout)
 {
-	String data;
-	char a;
-	unsigned long start = millis();
-	while (millis() - start < timeout) {
-		while(m_puart->available() > 0) {
-			a = m_puart->read();
-			if(a == '\0') continue;
-			data += a;
-		}
+	bufferCursor = 0; 
+	serialResponseTimestamp = millis();
+	serialResponseTimeout = timeout;
 
-		if (data.indexOf(target) != -1) {
-			break;
-		}   
-	}
-	return data;
+	setResponseTrueKeywords(target);
+	setResponseFalseKeywords();
 }
 
-String ESP8266::recvString(String target1, String target2, uint32_t timeout)
+void ESP8266::recvString(char target1[], char target2[], uint32_t timeout)
 {
-	String data;
-	char a;
-	unsigned long start = millis();
-	while (millis() - start < timeout) {
-		while(m_puart->available() > 0) {
-			a = m_puart->read();
-			if(a == '\0') continue;
-			data += a;
-		}
+	bufferCursor = 0; 
+	serialResponseTimestamp = millis();
+	serialResponseTimeout = timeout;
 
-		if (data.indexOf(target1) != -1) {
-			break;
-		} else if (data.indexOf(target2) != -1) {
-			break;
-		}
-	}
-	return data;
+	setResponseTrueKeywords(target1);
+	setResponseFalseKeywords(target2);
 }
 
-String ESP8266::recvString(String target1, String target2, String target3, uint32_t timeout)
+void ESP8266::recvString(char target1[], char target2[], char target3[], uint32_t timeout)
 {
-	String data;
-	char a;
-	unsigned long start = millis();
-	while (millis() - start < timeout) {
-		while(m_puart->available() > 0) {
-			a = m_puart->read();
-			if(a == '\0') continue;
-			data += a;
-		}
+	bufferCursor = 0; 
+	serialResponseTimestamp = millis();
+	serialResponseTimeout = timeout;
 
-		if (data.indexOf(target1) != -1) {
-			break;
-		} else if (data.indexOf(target2) != -1) {
-			break;
-		} else if (data.indexOf(target3) != -1) {
-			break;
-		}
+	setResponseTrueKeywords(target1,target3);
+	setResponseFalseKeywords(target2);
+
+	/*while (millis() - start < timeout) {
+	while(m_puart->available() > 0) {
+	a = m_puart->read();
+	if(a == '\0') continue;
+	data += a;
 	}
-	return data;
+
+	if (data.indexOf(target1) != -1) {
+	break;
+	} else if (data.indexOf(target2) != -1) {
+	break;
+	} else if (data.indexOf(target3) != -1) {
+	break;
+	}
+	}*/
+
 }
 
 ///
-bool ESP8266::recvFind(String target, uint32_t timeout)
+bool ESP8266::recvFind(char target[], uint32_t timeout)
 {
-	String data_tmp;
-	data_tmp = recvString(target, timeout);
-	if (data_tmp.indexOf(target) != -1) {
-		return true;
-	}
+	recvString(target, timeout);
+
+	//String data_tmp;
+	//data_tmp = recvString(target, timeout);
+	//if (data_tmp.indexOf(target) != -1) {
+	//	return true;
+	//}
 	return false;
 }
 
 ///
-bool ESP8266::recvFindAndFilter(String target, String begin, String end, String &data, uint32_t timeout)
-{
-	String data_tmp;
-	data_tmp = recvString(target, timeout);
-	if (data_tmp.indexOf(target) != -1) {
-		int32_t index1 = data_tmp.indexOf(begin);
-		int32_t index2 = data_tmp.indexOf(end);
-		if (index1 != -1 && index2 != -1) {
-			index1 += begin.length();
-			data = data_tmp.substring(index1, index2);
-			return true;
-		}
-	}
-	data = "";
-	return false;
-}
+//bool ESP8266::recvFindAndFilter(String target, String begin, String end, String &data, uint32_t timeout)
+//{
+//	String data_tmp;
+//	data_tmp = recvString(target, timeout);
+//
+//	if (data_tmp.indexOf(target) != -1) {
+//		int32_t index1 = data_tmp.indexOf(begin);
+//		int32_t index2 = data_tmp.indexOf(end);
+//		if (index1 != -1 && index2 != -1) {
+//			index1 += begin.length();
+//			data = data_tmp.substring(index1, index2);
+//			return true;
+//		}
+//	}
+//	data = "";
+//	return false;
+//}
 
 /// for joinAP
 bool ESP8266::sATCWJAP(String ssid, String pwd)
 {
+
+	state = STATE_joinAP;
+
 	String data;
 	rx_empty();
 	m_puart->print("AT+CWJAP=\"");
@@ -384,10 +367,11 @@ bool ESP8266::sATCWJAP(String ssid, String pwd)
 	m_puart->print(pwd);
 	m_puart->println("\"");
 
-	data = recvString("OK", "FAIL", 10000);
-	if (data.indexOf("OK") != -1) {
-		return true;
-	}
+	//data = 
+	recvString("OK", "FAIL", 10000);
+	/*if (data.indexOf("OK") != -1) {
+	return true;
+	}*/
 	return false;
 }
 
@@ -395,6 +379,8 @@ bool ESP8266::sATCWJAP(String ssid, String pwd)
 ///for leaveAP
 bool ESP8266::eATCWQAP(void)
 {
+	state = STATE_leaveAP;
+
 	String data;
 	rx_empty();
 	m_puart->println("AT+CWQAP");
@@ -405,16 +391,20 @@ bool ESP8266::eATCWQAP(void)
 ///for getIPStatus
 bool ESP8266::eATCIPSTATUS(String &list)
 {
+	state = STATE_getIPStatus;
+
 	String data;
 	delay(100);
 	rx_empty();
 	m_puart->println("AT+CIPSTATUS");
-	return recvFindAndFilter("OK", "\r\r\n", "\r\n\r\nOK", list);
+	return 0;//recvFindAndFilter("OK", "\r\r\n", "\r\n\r\nOK", list);
 }
 
 ///for createTCP
 bool ESP8266::sATCIPSTARTSingle(String type, String addr, uint32_t port)
 {
+	state = STATE_createTCP;
+
 	String data;
 	rx_empty();
 	m_puart->print("AT+CIPSTART=\"");
@@ -424,16 +414,21 @@ bool ESP8266::sATCIPSTARTSingle(String type, String addr, uint32_t port)
 	m_puart->print("\",");
 	m_puart->println(port);
 
-	data = recvString("OK", "ERROR", "ALREADY CONNECT", 10000);
-	if (data.indexOf("OK") != -1 || data.indexOf("ALREADY CONNECT") != -1) {
-		return true;
-	}
+	//data = 
+	recvString("OK", "ERROR", "ALREADY CONNECT", 10000);
+
+	/*if (data.indexOf("OK") != -1 || data.indexOf("ALREADY CONNECT") != -1) {
+	return true;
+	}*/
 	return false;
+
 }
 
 ///for send
 bool ESP8266::sATCIPSENDSingle(const uint8_t *buffer, uint32_t len)
 {
+	state = STATE_send;
+
 	rx_empty();
 	m_puart->print("AT+CIPSEND=");
 	m_puart->println(len);
@@ -450,11 +445,23 @@ bool ESP8266::sATCIPSENDSingle(const uint8_t *buffer, uint32_t len)
 ///for releaseTCP
 bool ESP8266::eATCIPCLOSESingle(void)
 {
+	state = STATE_releaseTCP;
+
 	rx_empty();
 	m_puart->println("AT+CIPCLOSE");
 	return recvFind("OK", 5000);
 }
 
+void ESP8266::waitMessage(){
+	state = STATE_IDLE;
+
+
+	recvFind(KEYWORD_PIPD, 30000);
+
+	//serialResponseHandler = ReadMessage;
+
+	//readResponse(30000, ReadMessage);
+}
 
 bool ESP8266::bufferFind(bool trueKeywords) {
 	//char keywords[][16];
@@ -490,8 +497,8 @@ void ESP8266::update()
 
 	switch (state) {
 	case STATE_IDLE:
-	case STATE_RECIVING_DATA:
-		readResponse(serialResponseTimestamp, serialResponseHandler);
+		//case STATE_RECIVING_DATA:
+		//readResponse(serialResponseTimestamp, serialResponseHandler);
 
 		break;
 		//case STATE_CONNECTED:
@@ -505,7 +512,7 @@ void ESP8266::update()
 	}*/
 }
 
-void ESP8266::readResponse(unsigned long timeout, void(*handler)(uint8_t serialResponseStatus)) {
+void ESP8266::readResponse(unsigned long timeout) {
 	//switch (state) {
 	//case STATE_IDLE:
 	//case STATE_CONNECTED:
@@ -541,20 +548,20 @@ void ESP8266::readResponse(unsigned long timeout, void(*handler)(uint8_t serialR
 	//		}
 	//	}
 	//	else {
-	//		while (_wifiSerial.available() > 0)
-	//		{
-	//			if (bufferCursor < (SERIAL_RX_BUFFER_SIZE-1)){
-	//				buffer[bufferCursor] = _wifiSerial.read();
-	//				bufferCursor++;
-	//			}
-	//			else {
-	//				DBG(F("ESP8266 lib buffer overflow \r\n"));
-	//				//empty the wifiSerial buffer'
-	//				serialFlush();
-	//				break;
-	//			}
-	//		}
-	//		buffer[bufferCursor] = '\0';
+	while (m_puart->available() > 0)
+	{
+		if (bufferCursor < (SERIAL_RX_BUFFER_SIZE-1)){
+			buffer[bufferCursor] = m_puart->read();
+			bufferCursor++;
+		}
+		else {
+			//DBG(F("ESP8266 lib buffer overflow \r\n"));
+			//empty the wifiSerial buffer'
+			rx_empty();
+			break;
+		}
+	}
+	buffer[bufferCursor] = '\0';
 	//	}
 	//	break;
 	//}
@@ -563,3 +570,22 @@ void ESP8266::readResponse(unsigned long timeout, void(*handler)(uint8_t serialR
 	////DBG(state);
 }
 
+
+void ESP8266::callSerialResponseMethod(uint8_t serialResponseStatus){
+	switch (state) {
+	case STATE_IDLE: ReadMessage(serialResponseStatus);
+		break;
+	case STATE_getIPStatus: 
+		break;
+	case STATE_joinAP: 
+		break;
+	case STATE_leaveAP: 
+		break;
+	case STATE_createTCP: 
+		break;
+	case STATE_releaseTCP: 
+		break;
+	case STATE_send: 
+		break;
+	}
+}
