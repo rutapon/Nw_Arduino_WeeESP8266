@@ -213,16 +213,19 @@ private:
 	*/
 	void recvString(char target1[], char target2[], char target3[],  uint32_t timeout = 1000);
 
+
+	String recvStringSync(String target1, String target2, String target3,  uint32_t timeout = 1000);
+
 	/* 
 	* Recvive data from uart and search first target. Return true if target found, false for timeout.
 	*/
-	bool recvFind(char target1[], uint32_t timeout = 1000);
+	//bool recvFind(char target1[], uint32_t timeout = 1000);
 
 	/* 
 	* Recvive data from uart and search first target and cut out the substring between begin and end(excluding begin and end self). 
 	* Return true if target found, false for timeout.
 	*/
-	//bool recvFindAndFilter(String target, String begin, String end, String &data, uint32_t timeout = 1000);
+	bool recvFindAndFilter(String target, String begin, String end, String &data, uint32_t timeout = 1000);
 
 	/*
 	* Receive a package from uart. 
@@ -249,8 +252,6 @@ private:
 	bool eATCIPCLOSESingle(void);///
 
 
-
-
 	/*
 	* +IPD,len:data
 	* +IPD,id,len:data
@@ -270,6 +271,9 @@ private:
 	char buffer[SERIAL_RX_BUFFER_SIZE];
 	uint16_t bufferCursor;
 
+	uint8_t *_messageBuffer;
+	uint32_t _buffer_size;
+
 	bool bufferFind(bool trueKeywords);
 
 	// serial response keywords for current communication
@@ -285,10 +289,10 @@ private:
 
 
 	void(*wifiConnectedHandler)();
-	void(*wifiDisconnectedHandler)();
+	//void(*wifiDisconnectedHandler)();
 
 	void(*serverConnectedHandler)();
-	void(*serverDisconnectedHandler)();
+	//void(*serverDisconnectedHandler)();
 
 	void(*dataRecivedHandler)(char data[]);
 
@@ -296,7 +300,12 @@ private:
 
 	void callSerialResponseMethod(uint8_t serialResponseStatus);
 
-    void ReadMessage(uint8_t serialResponseStatus);
+	void ReadMessage(uint8_t serialResponseStatus);
+
+	void  ProcessResponse_joinAP		(uint8_t serialResponseStatus);
+
+	void  ProcessResponse_createTCP		(uint8_t serialResponseStatus);
+
 
 #ifdef ESP8266_USE_SOFTWARE_SERIAL
 	SoftwareSerial *m_puart; /* The UART to communicate with ESP8266 */

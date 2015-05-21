@@ -126,34 +126,6 @@ bool ESP8266::send(const uint8_t *buffer, uint32_t len)
 //}
 
 
-void ESP8266::ReadMessage(uint8_t serialResponseStatus) {
-	//wifi.state = STATE_DATA_RECIVED;
-
-	if (serialResponseStatus == SERIAL_RESPONSE_TRUE) {
-
-		//uint32_t len = recvPkg(_messageBuffer,_buffer_size,NULL, 30000,NULL, KEYWORD_PIPD);
-
-		/*if (len > 0) {
-
-		}*/
-
-	}
-	else if (serialResponseStatus == SERIAL_RESPONSE_FALSE) {
-		//DBG(F("\r\nESP8266 response msg error \r\n"));
-	}
-	else {
-		//DBG(F("\r\nESP8266 response msg timeout \r\n"));
-	}
-
-
-	/*if (strcmp(wifi.requests[0].serverIP, currentServer) != 0) {
-	wifi.closeConnection();
-	}
-	else {
-	wifi.state = STATE_CONNECTED;
-	}*/
-}
-
 ///
 uint32_t ESP8266::recvPkg(uint8_t *buffer, uint32_t buffer_size, uint32_t *data_len, uint32_t timeout, uint8_t *coming_mux_id , String data)
 {
@@ -303,6 +275,10 @@ void ESP8266::recvString(char target1[], char target2[], char target3[], uint32_
 	setResponseTrueKeywords(target1,target3);
 	setResponseFalseKeywords(target2);
 
+}
+
+String ESP8266::recvStringSync(String target1, String target2, String target3,  uint32_t timeout ){
+	
 	/*while (millis() - start < timeout) {
 	while(m_puart->available() > 0) {
 	a = m_puart->read();
@@ -318,45 +294,41 @@ void ESP8266::recvString(char target1[], char target2[], char target3[], uint32_
 	break;
 	}
 	}*/
-
 }
 
 ///
-bool ESP8266::recvFind(char target[], uint32_t timeout)
+bool ESP8266::recvFind(String target, uint32_t timeout)
 {
-	recvString(target, timeout);
-
-	//String data_tmp;
-	//data_tmp = recvString(target, timeout);
-	//if (data_tmp.indexOf(target) != -1) {
-	//	return true;
-	//}
+	String data_tmp;
+	data_tmp = recvStringSync(target, timeout);
+	if (data_tmp.indexOf(target) != -1) {
+		return true;
+	}
 	return false;
 }
 
 ///
-//bool ESP8266::recvFindAndFilter(String target, String begin, String end, String &data, uint32_t timeout)
-//{
-//	String data_tmp;
-//	data_tmp = recvString(target, timeout);
-//
-//	if (data_tmp.indexOf(target) != -1) {
-//		int32_t index1 = data_tmp.indexOf(begin);
-//		int32_t index2 = data_tmp.indexOf(end);
-//		if (index1 != -1 && index2 != -1) {
-//			index1 += begin.length();
-//			data = data_tmp.substring(index1, index2);
-//			return true;
-//		}
-//	}
-//	data = "";
-//	return false;
-//}
+bool ESP8266::recvFindAndFilter(String target, String begin, String end, String &data, uint32_t timeout)
+{
+	String data_tmp;
+	data_tmp = recvStringSync(target, timeout);
 
-/// for joinAP
+	if (data_tmp.indexOf(target) != -1) {
+		int32_t index1 = data_tmp.indexOf(begin);
+		int32_t index2 = data_tmp.indexOf(end);
+		if (index1 != -1 && index2 != -1) {
+			index1 += begin.length();
+			data = data_tmp.substring(index1, index2);
+			return true;
+		}
+	}
+	data = "";
+	return false;
+}
+
+/// for joinAP (async)
 bool ESP8266::sATCWJAP(String ssid, String pwd)
 {
-
 	state = STATE_joinAP;
 
 	String data;
@@ -376,7 +348,7 @@ bool ESP8266::sATCWJAP(String ssid, String pwd)
 }
 
 
-///for leaveAP
+///for leaveAP (sync)
 bool ESP8266::eATCWQAP(void)
 {
 	state = STATE_leaveAP;
@@ -384,11 +356,12 @@ bool ESP8266::eATCWQAP(void)
 	String data;
 	rx_empty();
 	m_puart->println("AT+CWQAP");
+
 	return recvFind("OK");
 }
 
 
-///for getIPStatus
+///for getIPStatus (sync)
 bool ESP8266::eATCIPSTATUS(String &list)
 {
 	state = STATE_getIPStatus;
@@ -397,10 +370,10 @@ bool ESP8266::eATCIPSTATUS(String &list)
 	delay(100);
 	rx_empty();
 	m_puart->println("AT+CIPSTATUS");
-	return 0;//recvFindAndFilter("OK", "\r\r\n", "\r\n\r\nOK", list);
+	return recvFindAndFilter("OK", "\r\r\n", "\r\n\r\nOK", list);
 }
 
-///for createTCP
+///for createTCP (async)
 bool ESP8266::sATCIPSTARTSingle(String type, String addr, uint32_t port)
 {
 	state = STATE_createTCP;
@@ -424,7 +397,7 @@ bool ESP8266::sATCIPSTARTSingle(String type, String addr, uint32_t port)
 
 }
 
-///for send
+///for send (sync)
 bool ESP8266::sATCIPSENDSingle(const uint8_t *buffer, uint32_t len)
 {
 	state = STATE_send;
@@ -442,7 +415,7 @@ bool ESP8266::sATCIPSENDSingle(const uint8_t *buffer, uint32_t len)
 	return false;
 }
 
-///for releaseTCP
+///for releaseTCP (sync)
 bool ESP8266::eATCIPCLOSESingle(void)
 {
 	state = STATE_releaseTCP;
@@ -452,15 +425,11 @@ bool ESP8266::eATCIPCLOSESingle(void)
 	return recvFind("OK", 5000);
 }
 
+// (async)
 void ESP8266::waitMessage(){
 	state = STATE_IDLE;
-
-
-	recvFind(KEYWORD_PIPD, 30000);
-
-	//serialResponseHandler = ReadMessage;
-
-	//readResponse(30000, ReadMessage);
+	rx_empty();
+	recvString(KEYWORD_PIPD, 30000);
 }
 
 bool ESP8266::bufferFind(bool trueKeywords) {
@@ -497,9 +466,9 @@ void ESP8266::update()
 
 	switch (state) {
 	case STATE_IDLE:
-		//case STATE_RECIVING_DATA:
-		//readResponse(serialResponseTimestamp, serialResponseHandler);
-
+	case STATE_joinAP:
+	case STATE_createTCP:
+		readResponse(serialResponseTimestamp);
 		break;
 		//case STATE_CONNECTED:
 		//	if (requests[0].serverIP != NULL) {
@@ -571,21 +540,68 @@ void ESP8266::readResponse(unsigned long timeout) {
 }
 
 
+void ESP8266::ReadMessage(uint8_t serialResponseStatus) {
+	//wifi.state = STATE_DATA_RECIVED;
+
+	if (serialResponseStatus == SERIAL_RESPONSE_TRUE) {
+
+		uint32_t len = recvPkg(_messageBuffer,_buffer_size,NULL, 30000,NULL, KEYWORD_PIPD);
+
+		if (len > 0) {
+
+		}
+
+	}
+	else if (serialResponseStatus == SERIAL_RESPONSE_FALSE) {
+		//DBG(F("\r\nESP8266 response msg error \r\n"));
+	}
+	else {
+		//DBG(F("\r\nESP8266 response msg timeout \r\n"));
+	}
+
+
+	/*if (strcmp(wifi.requests[0].serverIP, currentServer) != 0) {
+	wifi.closeConnection();
+	}
+	else {
+	wifi.state = STATE_CONNECTED;
+	}*/
+}
+
+
+void   ESP8266::ProcessResponse_joinAP(uint8_t serialResponseStatus){
+	if (serialResponseStatus == SERIAL_RESPONSE_TRUE) {
+
+	}
+	else if (serialResponseStatus == SERIAL_RESPONSE_FALSE) {
+
+	}
+	else {
+
+	}
+}
+
+
+void   ESP8266::ProcessResponse_createTCP(uint8_t serialResponseStatus){
+	if (serialResponseStatus == SERIAL_RESPONSE_TRUE) {
+
+	}
+	else if (serialResponseStatus == SERIAL_RESPONSE_FALSE) {
+
+	}
+	else {
+
+	}
+}
+
+
 void ESP8266::callSerialResponseMethod(uint8_t serialResponseStatus){
 	switch (state) {
 	case STATE_IDLE: ReadMessage(serialResponseStatus);
 		break;
-	case STATE_getIPStatus: 
+	case STATE_joinAP: ProcessResponse_joinAP(serialResponseStatus);
 		break;
-	case STATE_joinAP: 
-		break;
-	case STATE_leaveAP: 
-		break;
-	case STATE_createTCP: 
-		break;
-	case STATE_releaseTCP: 
-		break;
-	case STATE_send: 
+	case STATE_createTCP: ProcessResponse_createTCP(serialResponseStatus);
 		break;
 	}
 }
