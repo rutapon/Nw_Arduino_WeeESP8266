@@ -22,14 +22,15 @@
 #define __ESP8266_H__
 
 #include "Arduino.h"
-
+#include <EEPROM.h>
 
 #define ESP8266_USE_SOFTWARE_SERIAL
 
 
 #ifdef ESP8266_USE_SOFTWARE_SERIAL
-#include "SoftwareSerial.h"
+#include <SoftwareSerial.h>
 #endif
+
 
 #define SERIAL_RX_BUFFER_SIZE 128
 
@@ -67,6 +68,8 @@
 
 #define KEYWORD_OK "\nOK"
 #define KEYWORD_SEND_OK "\nSEND OK"
+#define KEYWORD_SEND_ERROR "\nlink is not"
+
 #define KEYWORD_READY "\nready"
 #define KEYWORD_ERROR "\nERROR"
 #define KEYWORD_FAIL "\nFAIL"
@@ -76,6 +79,57 @@
 /**
 * Provide an easy-to-use way to manipulate ESP8266. 
 */
+///////////////////////////////////////////////////////////////////////////
+
+#define BUFFER_SIZE 32
+
+//#include <stddef.h>
+//
+//#include <stdint.h>
+//#include <stdio.h>
+//#include <string.h>
+
+
+enum  PacketType : uint8_t {
+	rq =1,
+	rrq=2,
+	rp =3,
+	itv = 4,
+	ev=5
+};
+
+
+enum  CmdType : uint8_t {
+	nun = 0,
+	DigitlaReadPin = 1,
+	DigitalWritePin = 2,
+	GetPinState = 3,
+	GetName = 4,
+	SetName = 5,
+
+	PinChangeEvent = 100
+};
+
+
+typedef struct{
+	//uint8_t nodeId;    //sensor id
+	uint32_t pid;
+	PacketType type;
+	CmdType cmd;
+	char data[20];
+	//uint8_t nodeId2; 
+} DataPacket;
+
+//typedef struct{
+//	ConfigState state;
+//	char deviceName [10];
+//	char ssid [15] ;
+//	char password [15];
+//	char hostname [20];
+//	uint32_t hostport;
+//} Configuration;
+//
+
 class ESP8266 {
 public:
 
@@ -187,9 +241,40 @@ public:
 	uint32_t recvAsync(uint8_t *buffer, uint32_t buffer_size, uint32_t timeout);
 
 	void stopRecving();
-	bool isRecving();
+	//bool isRecving();
 
 	void update();
+
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	bool begin(String  ssid, String pass,String hostName, uint32_t port);
+	bool tryBegin(String  ssid, String pass,String hostName, uint32_t port);
+
+	bool connectTcp(String hostName, uint32_t port);
+	//bool releaseTCP ();
+	bool tryConnectTcp(int numTry=-1);
+
+
+	bool sendData(char *data, PacketType type = rq,CmdType cmd = nun);
+	bool sendData(DataPacket &packet);
+	//bool sendDataQueue(DataPacket &packet);
+
+	bool sendInterval ();
+	bool sendInterval (char * msg);
+
+	//uint8_t checkReceiveData();
+	void dataRespontWaitAndRetry();
+
+	uint32_t createPacket();
+
+	void setOnConnectAPEventHandle( void (*userFunc)());
+	void setOnConnectServerEventHandle( void (*userFunc)());
+	void setOnReceiveDataEventHandle( void (*userFunc)(DataPacket &packet));
+
+
+	// library state
+	uint8_t state;
 
 private:
 
@@ -214,12 +299,12 @@ private:
 	void recvString(char target1[], char target2[], char target3[],  uint32_t timeout = 1000);
 
 
-	String recvStringSync(String target1, String target2, String target3,  uint32_t timeout = 1000);
+	String recvStringSync(String target1,  uint32_t timeout = 1000, String targetErr = "");
 
 	/* 
 	* Recvive data from uart and search first target. Return true if target found, false for timeout.
 	*/
-	//bool recvFind(char target1[], uint32_t timeout = 1000);
+	bool recvFind(String target, uint32_t timeout = 1000, String targetErr = "");
 
 	/* 
 	* Recvive data from uart and search first target and cut out the substring between begin and end(excluding begin and end self). 
@@ -265,20 +350,18 @@ private:
 	unsigned long serialResponseTimestamp;
 	unsigned long lastActivityTimestamp;
 
-	// library state
-	uint8_t state;
 
 	char buffer[SERIAL_RX_BUFFER_SIZE];
-	uint16_t bufferCursor;
+	uint16_t bufferCursor = 0;
 
-	uint8_t *_messageBuffer;
-	uint32_t _buffer_size;
+	/*uint8_t *_messageBuffer;
+	uint32_t _buffer_size;*/
 
 	bool bufferFind(bool trueKeywords);
 
 	// serial response keywords for current communication
-	char responseTrueKeywords[1][16];
-	char responseFalseKeywords[1][16];
+	char responseTrueKeywords[2][16];
+	char responseFalseKeywords[2][16];
 
 	// non blocking serial reading
 	void readResponse(unsigned long timeout);
@@ -300,19 +383,84 @@ private:
 
 	void callSerialResponseMethod(uint8_t serialResponseStatus);
 
-	void ReadMessage(uint8_t serialResponseStatus);
+	void ReadMessage();
 
 	void  ProcessResponse_joinAP		(uint8_t serialResponseStatus);
 
 	void  ProcessResponse_createTCP		(uint8_t serialResponseStatus);
 
+	//void (*onReceiveDataEventHandle)();
 
 #ifdef ESP8266_USE_SOFTWARE_SERIAL
 	SoftwareSerial *m_puart; /* The UART to communicate with ESP8266 */
 #else
 	HardwareSerial *m_puart; /* The UART to communicate with ESP8266 */
 #endif
+
+	//////////////////////////////////////////////////////////////////////////////
+
+	String _ssid;
+	String _pass;
+
+	String _hostName;
+	uint32_t _port;
+
+	//uint8_t _nodeId = 0;
+	uint32_t _pid = 0;
+	DataPacket _sendingPacket ;
+	bool _isSending = false;
+
+	//QueueList <DataPacket> _packetQueue;
+
+	DataPacket _buffer;
+
+	//uint8_t buffer[BUFFER_SIZE] = {0};
+	//char bufferChar[BUFFER_SIZE];
+
+	//bool trySendQueueData();
+
+	unsigned long _startWaitingMillis = 0;   
+
+	uint16_t  _waitingInterval = 1000;
+
+	void startWaitRespond();
+
+	unsigned long _lastSendTimeMillis = 0;   
+	bool sendMsg (	const uint8_t*  data ,uint32_t len );
+
+	void processReceiveData();
+
+
+	void (*onConnectAPEventHandle)();
+	void (*onConnectServerEventHandle)();
+
+	void (*onReceiveDataEventHandle)(DataPacket  &packet);
+
+	void(* resetFunc) (void) = 0;
 };
 
 #endif /* #ifndef __ESP8266_H__ */
 
+#pragma region EEPROM read write
+
+
+template <class T> int EEPROM_writeAnything(int ee, const T& value)
+{
+	const byte* p = (const byte*)(const void*)&value;
+	unsigned int i;
+	for (i = 0; i < sizeof(value); i++)
+		EEPROM.write(ee++, *p++);
+	return i;
+}
+
+template <class T> int EEPROM_readAnything(int ee, T& value)
+{
+	byte* p = (byte*)(void*)&value;
+	unsigned int i;
+	for (i = 0; i < sizeof(value); i++)
+		*p++ = EEPROM.read(ee++);
+	return i;
+}
+
+
+#pragma endregion for configuration
